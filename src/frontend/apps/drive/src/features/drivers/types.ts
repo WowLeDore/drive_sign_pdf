@@ -70,7 +70,24 @@ export type Item = {
   updated_at: Date;
   description: string;
   is_wopi_supported?: boolean;
+  sign_status?: "waiting" | "signed" | "declined" | null;
+  sign_request?: {
+    id: string;
+    original_item: string;
+    copy_item: string;
+    signer: string;
+    signer_name?: string;
+    issuer: string;
+    issuer_name?: string;
+    status: "waiting" | "signed" | "declined";
+    zone_x: number;
+    zone_y: number;
+    zone_width: number;
+    zone_height: number;
+    zone_page: number;
+  } | null;
   created_at: Date;
+
   is_favorite?: boolean;
   children?: Item[];
   parents?: Item[];
@@ -109,6 +126,7 @@ export type Item = {
     update: boolean;
     upload_ended: boolean;
     convert?: boolean;
+    can_sign?: boolean;
   };
   policy?: string;
 };
@@ -202,6 +220,7 @@ export interface ThemeCustomization {
 
 export type ApiConfig = {
   ALLOW_SHARE_IMPORT_FILE?: boolean;
+  ALLOW_SIGN_IMPORT_FILE?: boolean;
   AWS_S3_UPLOAD_ACL?: string;
   DATA_UPLOAD_MAX_MEMORY_SIZE?: number;
   POSTHOG_KEY?: string;

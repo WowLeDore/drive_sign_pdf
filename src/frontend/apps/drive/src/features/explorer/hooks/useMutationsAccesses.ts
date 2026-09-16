@@ -1,5 +1,7 @@
 import { getDriver } from "@/features/config/Config";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchAPI } from "@/features/api/fetchApi";
+import { APIError } from "@/features/api/APIError";
 import { useOnSuccessAccessOrInvitationMutation } from "./useRefreshItems";
 
 // ============================================================================
@@ -27,6 +29,23 @@ export const useMutationBatchShare = () => {
     meta: { noGlobalError: true },
     mutationFn: (...payload: Parameters<typeof driver.batchShare>) => {
       return driver.batchShare(...payload);
+    },
+    onSuccess: (_, variables) => {
+      // A batch can create both accesses and invitations
+      onSuccessAccessOrInvitation(variables.itemId, false);
+      onSuccessAccessOrInvitation(variables.itemId, true);
+    },
+  });
+};
+
+export const useMutationBatchSign = () => {
+  const driver = getDriver();
+  const onSuccessAccessOrInvitation = useOnSuccessAccessOrInvitationMutation();
+  return useMutation({
+    // Errors are displayed inside the import modal, not by the global toast
+    meta: { noGlobalError: true },
+    mutationFn: (...payload: Parameters<typeof driver.batchSign>) => {
+      return driver.batchSign(...payload);
     },
     onSuccess: (_, variables) => {
       // A batch can create both accesses and invitations
@@ -102,3 +121,77 @@ export const useMutationDeleteInvitation = () => {
     },
   });
 };
+
+export const useMutationCreateSignRequests = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      signers,
+      zone,
+      is_self_sign,
+    }: {
+      itemId: string;
+      signers: string[];
+      zone: any;
+      is_self_sign?: boolean;
+    }) => {
+      const response = await fetchAPI(
+        `items/${itemId}/sign-requests/`,
+        {
+          method: "POST",
+          body: JSON.stringify({ signers, zone, is_self_sign }),
+        },
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+};
+
+export const useMutationExecuteSign = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId }: { itemId: string }) => {
+      const response = await fetchAPI(
+        `items/${itemId}/execute-sign/`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        },
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+};
+
+export const useMutationDeclineSign = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      reason,
+    }: {
+      itemId: string;
+      reason?: string;
+    }) => {
+      const response = await fetchAPI(
+        `items/${itemId}/decline-sign/`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        },
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["items"] });
+    },
+  });
+};
+

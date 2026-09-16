@@ -26,6 +26,14 @@ export type DTOBatchShare = {
   }[];
 };
 
+export type DTOBatchSign = {
+  itemId: string;
+  rows: {
+    email: string;
+    role: Role;
+  }[];
+};
+
 export type DTOUpdateLinkConfiguration = {
   itemId: string;
   link_reach: LinkReach;

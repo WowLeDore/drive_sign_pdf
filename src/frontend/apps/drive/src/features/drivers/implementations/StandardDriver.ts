@@ -13,6 +13,7 @@ import {
 } from "../DTOs/InvitationDTO";
 import {
   DTOBatchShare,
+  DTOBatchSign,
   DTOCreateAccess,
   DTOUpdateLinkConfiguration,
 } from "../DTOs/AccessesDTO";
@@ -196,6 +197,16 @@ export class StandardDriver extends Driver {
 
   async batchShare(payload: DTOBatchShare): Promise<void> {
     await fetchAPI(`items/${payload.itemId}/batch-share/`, {
+      method: "POST",
+      body: JSON.stringify({
+        rows: payload.rows,
+      }),
+    });
+  }
+
+  async batchSign(payload: DTOBatchSign): Promise<void> {
+    // TODO: replace with the real backend sign endpoint once it exists
+    await fetchAPI(`items/${payload.itemId}/batch-sign/`, {
       method: "POST",
       body: JSON.stringify({
         rows: payload.rows,
