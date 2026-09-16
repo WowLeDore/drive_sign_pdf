@@ -76,6 +76,7 @@ export const SignZoneOverlayManager = ({
   } | null>(null);
 
   const isDraggingOrResizingRef = useRef(false);
+  const wasDraggingRef = useRef(false);
   const dragCleanupTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const stableOnZoneChange = useRef(onZoneChange);
@@ -135,7 +136,7 @@ export const SignZoneOverlayManager = ({
     pageEl: HTMLElement,
   ) => {
     if (!isInteractive) return;
-    if (dragRef.current || isDraggingOrResizingRef.current) return;
+    if (dragRef.current || isDraggingOrResizingRef.current || wasDraggingRef.current) return;
 
     const rect = pageEl.getBoundingClientRect();
     const clickXPct = ((e.clientX - rect.left) / rect.width) * 100;
@@ -170,6 +171,7 @@ export const SignZoneOverlayManager = ({
       dragCleanupTimerRef.current = null;
     }
     isDraggingOrResizingRef.current = true;
+    wasDraggingRef.current = true;
 
     dragRef.current = {
       type: "move",
@@ -192,6 +194,7 @@ export const SignZoneOverlayManager = ({
         dragCleanupTimerRef.current = null;
       }
       isDraggingOrResizingRef.current = true;
+      wasDraggingRef.current = true;
 
       dragRef.current = {
         type: "resize",
@@ -257,22 +260,37 @@ export const SignZoneOverlayManager = ({
     const handleMouseUp = () => {
       if (dragRef.current) {
         dragRef.current = null;
+        wasDraggingRef.current = true;
         if (dragCleanupTimerRef.current) {
           clearTimeout(dragCleanupTimerRef.current);
         }
         dragCleanupTimerRef.current = setTimeout(() => {
           isDraggingOrResizingRef.current = false;
           dragCleanupTimerRef.current = null;
-        }, 150);
+        }, 300);
+        setTimeout(() => {
+          wasDraggingRef.current = false;
+        }, 300);
+      }
+    };
+
+    const handleClickCapture = (e: MouseEvent) => {
+      if (wasDraggingRef.current || isDraggingOrResizingRef.current) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        wasDraggingRef.current = false;
       }
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseup", handleMouseUp, true);
+    window.addEventListener("click", handleClickCapture, true);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleMouseUp, true);
+      window.removeEventListener("click", handleClickCapture, true);
       if (dragCleanupTimerRef.current) {
         clearTimeout(dragCleanupTimerRef.current);
       }
