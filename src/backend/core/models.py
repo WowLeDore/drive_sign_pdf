@@ -2141,3 +2141,64 @@ class Invitation(BaseModel):
             "partial_update": is_owner_or_admin,
             "retrieve": is_owner_or_admin,
         }
+
+class SignRequestStatusChoices(models.TextChoices):
+    """Choices for the status of a sign request."""
+
+    WAITING = "waiting", _("Waiting")
+    SIGNED = "signed", _("Signed")
+    DECLINED = "declined", _("Declined")
+
+
+class SignRequest(BaseModel):
+    """
+    Model representing a signature request.
+    Links the original PDF to the copy spawned for the specific signer.
+    Stores the signature zone coordinates and current status.
+    """
+
+    original_item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="sign_requests_as_original",
+        help_text=_("The original item that was requested to be signed."),
+    )
+    copy_item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="sign_request_as_copy",
+        help_text=_("The spawned copy dedicated to the signer."),
+    )
+    signer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="sign_requests",
+        help_text=_("The user who is requested to sign the copy."),
+    )
+    issuer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="issued_sign_requests",
+        help_text=_("The user who created this sign request."),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=SignRequestStatusChoices.choices,
+        default=SignRequestStatusChoices.WAITING,
+        help_text=_("Current status of the sign request."),
+    )
+    
+    # Signature Zone coordinates (percentages)
+    zone_x = models.FloatField(help_text=_("X coordinate of the signature zone in percentage."))
+    zone_y = models.FloatField(help_text=_("Y coordinate of the signature zone in percentage."))
+    zone_width = models.FloatField(help_text=_("Width of the signature zone in percentage."))
+    zone_height = models.FloatField(help_text=_("Height of the signature zone in percentage."))
+    zone_page = models.IntegerField(help_text=_("0-indexed page number where the zone is placed."))
+
+    class Meta:
+        db_table = "drive_sign_request"
+        verbose_name = _("Sign Request")
+        verbose_name_plural = _("Sign Requests")
+
+    def __str__(self):
+        return f"SignRequest {self.id} for {self.signer} on {self.original_item}"
