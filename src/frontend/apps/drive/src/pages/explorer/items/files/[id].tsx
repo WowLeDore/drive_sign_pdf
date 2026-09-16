@@ -38,15 +38,39 @@ export default function FilePage() {
     );
   }
 
+  const signMode =
+    router.query.mode === "selfsign" ||
+    router.query.mode === "requestsign" ||
+    router.query.mode === "sign"
+      ? (router.query.mode as "selfsign" | "requestsign" | "sign")
+      : undefined;
+
+  const handleClose = () => {
+    if (window.history.length > 1) {
+      router.back();
+    } else if (item.parents && item.parents.length > 0) {
+      const directParent = item.parents[item.parents.length - 1];
+      router.push(`/explorer/items/${directParent.id}`);
+    } else if (item.sign_status === "waiting") {
+      router.push("/explorer/items/shared-with-me");
+    } else {
+      router.push("/explorer/items/my-files");
+    }
+  };
+
   return (
     <div>
       <CustomFilesPreview
         currentItem={item}
         items={[item]}
         mode={CustomFilesPreviewMode.CONTEXTUAL}
+        isSignMode={!!signMode}
+        signMode={signMode}
+        onClose={handleClose}
       />
     </div>
   );
+
 }
 
 FilePage.getLayout = function getLayout(page: React.ReactElement) {

@@ -1,6 +1,7 @@
 import { CellContext } from "@tanstack/react-table";
 import { Item, LinkReach } from "@/features/drivers/types";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Draggable } from "@/features/explorer/components/Draggable";
 import {
   Tooltip,
@@ -22,6 +23,7 @@ export type EmbeddedExplorerGridNameCellProps = CellContext<Item, string> & {
 const EmbeddedExplorerGridNameCellComponent = (
   params: EmbeddedExplorerGridNameCellProps,
 ) => {
+  const { t } = useTranslation();
   const item = params.row.original;
   const ref = useRef<HTMLSpanElement>(null);
   const [isOverflown, setIsOverflown] = useState(false);
@@ -49,6 +51,20 @@ const EmbeddedExplorerGridNameCellComponent = (
             ref={ref}
           >
             {removeFileExtension(item.title)}
+            {item.sign_status && (
+              <span
+                className={clsx(
+                  "explorer__grid__item__sign-status-badge",
+                  `explorer__grid__item__sign-status-badge--${item.sign_status}`,
+                )}
+              >
+                {item.sign_status === "signed"
+                  ? t("sign_badge.signed", "Signé")
+                  : item.sign_status === "declined"
+                  ? t("sign_badge.declined", "Refusé")
+                  : t("sign_badge.waiting", "En attente")}
+              </span>
+            )}
             {isTransient && (
               <span className="explorer__grid__item__name__duplicating-label">
                 {" "}

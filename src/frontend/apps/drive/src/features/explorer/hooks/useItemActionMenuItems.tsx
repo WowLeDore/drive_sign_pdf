@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Info,
   Trash,
+  BubbleEdit,
 } from "@gouvfr-lasuite/ui-components/icons";
 import { t } from "i18next";
 import {
@@ -26,6 +27,7 @@ import { baseApiUrl } from "@/features/api/utils";
 import { ExplorerRenameItemModal } from "../components/modals/ExplorerRenameItemModal";
 import { ExplorerCreateFolderModal } from "../components/modals/ExplorerCreateFolderModal";
 import { ItemShareModal } from "../components/modals/share/ItemShareModal";
+import { ItemSignModal } from "../components/modals/sign/ItemSignModal";
 import { useDeleteItem } from "./useDeleteItem";
 import { ExplorerMoveFolder } from "../components/modals/move/ExplorerMoveFolderModal";
 import { getParentIdFromPath, setManualNavigationItemId } from "../utils/utils";
@@ -71,6 +73,7 @@ export const useItemActionMenuItems = ({
   const { mutateAsync: duplicateItem } = useMutationDuplicateItem();
 
   const shareItemModal = useModal();
+  const signItemModal = useModal();
   const renameModal = useModal();
   const moveModal = useModal();
   const createFolderModal = useModal();
@@ -80,6 +83,7 @@ export const useItemActionMenuItems = ({
   const isModalOpen =
     renameModal.isOpen ||
     shareItemModal.isOpen ||
+    signItemModal.isOpen ||
     moveModal.isOpen ||
     createFolderModal.isOpen;
 
@@ -160,6 +164,20 @@ export const useItemActionMenuItems = ({
           shareItemModal.open();
         },
       },
+      {
+        icon: <span className="material-icons">draw</span>,
+        label: t("explorer.item.actions.sign"),
+        isHidden: !item.abilities?.can_sign,
+        callback: () => {
+          if (item.sign_status === "waiting") {
+            router.push(`/explorer/items/files/${effectiveItemId}?mode=sign`);
+          } else {
+            setCurrentItem(effectiveItem);
+            signItemModal.open();
+          }
+        },
+      },
+
       {
         icon: <Download />,
         label: t("explorer.item.actions.download"),
@@ -262,6 +280,15 @@ export const useItemActionMenuItems = ({
         shareItemModal.isOpen && (
           <ItemShareModal
             {...shareItemModal}
+            item={currentItem}
+            key={currentItem.id}
+          />
+        )}
+      {currentItem &&
+        currentItem.abilities?.can_sign &&
+        signItemModal.isOpen && (
+          <ItemSignModal
+            {...signItemModal}
             item={currentItem}
             key={currentItem.id}
           />
