@@ -278,6 +278,7 @@ class ListItemSerializer(serializers.ModelSerializer):
     hard_delete_at = serializers.SerializerMethodField(read_only=True)
     is_wopi_supported = serializers.SerializerMethodField()
     target = RestrictionTargetSerializer(read_only=True, allow_null=True)
+    sign_status = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Item
@@ -316,6 +317,7 @@ class ListItemSerializer(serializers.ModelSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
         ]
         read_only_fields = [
             "id",
@@ -348,6 +350,7 @@ class ListItemSerializer(serializers.ModelSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
         ]
 
     def to_representation(self, instance):
@@ -431,8 +434,16 @@ class ListItemSerializer(serializers.ModelSerializer):
 
     def get_is_wopi_supported(self, item):
         """Return whether the item is supported by WOPI protocol."""
+        if models.SignRequest.objects.filter(copy_item=item).exists():
+            return False
         request = self.context.get("request")
         return wopi_utils.is_item_wopi_supported(item, request.user if request else None)
+
+    def get_sign_status(self, item):
+        """Return the sign request status if this item is a sign copy."""
+        sign_req = models.SignRequest.objects.filter(copy_item=item).first()
+        return sign_req.status if sign_req else None
+
 
 
 class ListItemLightSerializer(ListItemSerializer):
@@ -471,6 +482,7 @@ class ListItemLightSerializer(ListItemSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
         ]
         read_only_fields = [
             "id",
@@ -496,6 +508,7 @@ class ListItemLightSerializer(ListItemSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
         ]
 
 
@@ -510,14 +523,77 @@ class SearchItemSerializer(ListItemSerializer):
         read_only_fields = ListItemSerializer.Meta.read_only_fields + ["parents"]
 
 
+class SignZoneSerializer(serializers.Serializer):
+    """Serializer for the signature zone coordinates."""
+
+    pageIndex = serializers.IntegerField(source="zone_page")
+    xPct = serializers.FloatField(source="zone_x")
+    yPct = serializers.FloatField(source="zone_y")
+    widthPct = serializers.FloatField(source="zone_width")
+    heightPct = serializers.FloatField(source="zone_height")
+
+
+class SignRequestSerializer(serializers.ModelSerializer):
+    """Serializer for the SignRequest model."""
+
+    signer_name = serializers.SerializerMethodField()
+    issuer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.SignRequest
+        fields = [
+            "id",
+            "original_item",
+            "copy_item",
+            "signer",
+            "signer_name",
+            "issuer",
+            "issuer_name",
+            "status",
+            "zone_x",
+            "zone_y",
+            "zone_width",
+            "zone_height",
+            "zone_page",
+        ]
+        read_only_fields = fields
+
+    def get_signer_name(self, obj):
+        return obj.signer.full_name or obj.signer.short_name or obj.signer.email
+
+    def get_issuer_name(self, obj):
+        return obj.issuer.full_name or obj.issuer.short_name or obj.issuer.email
+
+
+class SignRequestCreateSerializer(serializers.Serializer):
+    """Serializer for creating signature requests."""
+
+    signers = serializers.ListField(
+        child=serializers.EmailField(),
+        min_length=1,
+        help_text=_("List of emails to invite for signing."),
+    )
+    zone = SignZoneSerializer(help_text=_("The signature zone coordinates."))
+    is_self_sign = serializers.BooleanField(required=False, default=False)
+
+
+class DeclineSignSerializer(serializers.Serializer):
+    """Serializer for declining a signature request."""
+
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
 class ItemSerializer(ListItemSerializer):
     """Serialize items with all fields for display in detail views."""
+
+    sign_request = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Item
         fields = [
             "id",
             "abilities",
+
             "ancestors_link_reach",
             "ancestors_link_role",
             "computed_link_reach",
@@ -550,6 +626,8 @@ class ItemSerializer(ListItemSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
+            "sign_request",
         ]
         read_only_fields = [
             "id",
@@ -581,9 +659,18 @@ class ItemSerializer(ListItemSerializer):
             "deleted_at",
             "hard_delete_at",
             "is_wopi_supported",
+            "sign_status",
+            "sign_request",
         ]
 
+    def get_sign_request(self, item):
+        sign_req = models.SignRequest.objects.filter(copy_item=item).first()
+        if sign_req:
+            return SignRequestSerializer(sign_req).data
+        return None
+
     def create(self, validated_data):
+
         raise NotImplementedError("Create method can not be used.")
 
     def update(self, instance, validated_data):
@@ -949,6 +1036,26 @@ class BatchShareSerializer(serializers.Serializer):
     rows = BatchShareRowSerializer(many=True, allow_empty=False, max_length=BATCH_SHARE_MAX_ROWS)
 
 
+BATCH_SIGN_MAX_ROWS = 100  # Keep in sync with the ui-kit sign import modal max rows
+
+
+class BatchSignRowSerializer(serializers.Serializer):
+    """One row of a batch sign payload: a contact email and the role to grant."""
+
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=models.RoleChoices.choices)
+
+    def validate_email(self, value):
+        """Normalize emails to lower case like invitations do."""
+        return value.lower()
+
+
+class BatchSignSerializer(serializers.Serializer):
+    """Validate the payload of the item batch-sign action."""
+
+    rows = BatchSignRowSerializer(many=True, allow_empty=False, max_length=BATCH_SIGN_MAX_ROWS)
+
+
 class SDKRelayEventSerializer(serializers.Serializer):
     """Serializer for SDK relay events."""
 
@@ -970,3 +1077,4 @@ class SDKRelayEventSerializer(serializers.Serializer):
             )
 
         return value
+

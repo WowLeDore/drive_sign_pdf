@@ -49,10 +49,11 @@ from core import enums, models
 from core.entitlements import get_entitlements_backend
 from core.services.accesses import (
     batch_share_process_rows,
+    batch_sign_process_rows,
     synchronize_descendants_accesses,
 )
 from core.services.item_exports import build_zip_stream, export_descendants
-from core.services.sdk_relay import SDKRelayManager
+from core.services import pdf_signer
 from core.services.search_indexers import (
     get_file_indexer,
     get_visited_items_ids_of,
@@ -1642,6 +1643,84 @@ class ItemViewSet(
             status=drf.status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        request=serializers.BatchSignSerializer,
+        responses={
+            200: inline_serializer(
+                name="BatchSignResponse",
+                fields={
+                    "accesses_created": drf.serializers.IntegerField(),
+                    "invitations_created": drf.serializers.IntegerField(),
+                    "skipped": drf.serializers.ListField(child=drf.serializers.DictField()),
+                },
+            )
+        },
+    )
+    @drf.decorators.action(detail=True, methods=["post"], url_path="batch-sign")
+    def batch_sign(self, request, *args, **kwargs):
+        """
+        Request signatures on an item from a list of contacts in a single request.
+
+        Emails matching an existing user get an access, unknown emails get an
+        invitation. All rows are validated before any database write so a
+        rejected batch never creates a partial sign state.
+        """
+        if not settings.ALLOW_SIGN_IMPORT_FILE:
+            raise drf.exceptions.PermissionDenied(
+                "Batch signing from an imported file is not enabled."
+            )
+
+        item = self.get_object()
+
+        serializer = serializers.BatchSignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Deduplicate rows by email, keeping the first occurrence
+        rows = {}
+        for row in serializer.validated_data["rows"]:
+            rows.setdefault(row["email"], row["role"])
+
+        # A user cannot grant a role higher than their own. This also enforces
+        # that only owners can assign the owner role.
+        user_role_priority = models.RoleChoices.get_priority(item.get_role(request.user))
+        for role in rows.values():
+            if models.RoleChoices.get_priority(role) > user_role_priority:
+                raise drf.exceptions.PermissionDenied(
+                    f"You cannot grant the role {role} which is higher than your own role."
+                )
+
+        created_accesses, created_invitations, skipped = batch_sign_process_rows(
+            item, request.user, rows
+        )
+
+        for email, role in created_accesses + created_invitations:
+            item.send_invitation_email(
+                email,
+                role,
+                request.user,
+                request.user.language or settings.LANGUAGE_CODE,
+            )
+
+        posthog_capture(
+            "item_batch_sign",
+            request.user,
+            {
+                "accesses_created": len(created_accesses),
+                "invitations_created": len(created_invitations),
+                "skipped": len(skipped),
+            },
+            item=item,
+        )
+
+        return drf.response.Response(
+            {
+                "accesses_created": len(created_accesses),
+                "invitations_created": len(created_invitations),
+                "skipped": skipped,
+            },
+            status=drf.status.HTTP_200_OK,
+        )
+
     @drf.decorators.action(detail=True, methods=["post", "delete"], url_path="favorite")
     def favorite(self, request, *args, **kwargs):
         """
@@ -1940,6 +2019,271 @@ class ItemViewSet(
 
         serializer = self.get_serializer(duplicated_item)
         return drf.response.Response(serializer.data, status=drf.status.HTTP_201_CREATED)
+
+
+
+    @extend_schema(
+        request=serializers.SignRequestCreateSerializer,
+        responses=serializers.SignRequestSerializer(many=True),
+    )
+    @drf.decorators.action(detail=True, methods=["post"], url_path="sign-requests")
+    def sign_requests_create(self, request, pk=None):
+        """
+        Create signature requests on the given item.
+        - Option C (Self-sign): creates a non-editable copy, stamps user's signature immediately,
+          and marks the SignRequest as SIGNED.
+        - Option D (Request signatures): creates non-editable copies for each signer,
+          assigns READER role to signers, and marks SignRequests as WAITING.
+        """
+        item = self.get_object()
+        serializer = serializers.SignRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        signers = data["signers"]
+        zone = data["zone"]
+        user = request.user
+        is_self_sign = data.get("is_self_sign", False) or (
+            len(signers) == 1 and signers[0].lower() == user.email.lower()
+        )
+
+        s3_client = default_storage.connection.meta.client
+        created_requests = []
+        base_title = item.title.rsplit(".", 1)[0] if "." in item.title else item.title
+
+        parent = item.parent() if item.depth > 1 else None
+        if parent and parent.get_role(user) == models.RoleChoices.READER:
+            parent = None
+
+        if is_self_sign:
+            signer_label = user.short_name or user.full_name or user.email.split("@")[0]
+            clean_label = signer_label.lower().replace(" ", "")
+            copy_title = f"{base_title}_{clean_label}.pdf"
+
+            with transaction.atomic():
+                duplicated_item = models.Item.objects.create_child(
+                    creator=user,
+                    link_reach=None if parent else models.LinkReachChoices.RESTRICTED,
+                    parent=parent,
+                    title=copy_title,
+                    type=models.ItemTypeChoices.FILE,
+                    size=item.size,
+                    upload_state=models.ItemUploadStateChoices.READY,
+                    mimetype=item.mimetype,
+                    filename=item.filename,
+                    description=item.description,
+                )
+
+                if duplicated_item.is_root:
+                    models.ItemAccess.objects.create(
+                        item=duplicated_item,
+                        user=user,
+                        role=models.RoleChoices.OWNER,
+                    )
+
+                sign_req = models.SignRequest.objects.create(
+                    original_item=item,
+                    copy_item=duplicated_item,
+                    signer=user,
+                    issuer=user,
+                    status=models.SignRequestStatusChoices.SIGNED,
+                    zone_x=zone["zone_x"],
+                    zone_y=zone["zone_y"],
+                    zone_width=zone["zone_width"],
+                    zone_height=zone["zone_height"],
+                    zone_page=zone["zone_page"],
+                )
+                created_requests.append(sign_req)
+
+            # Copy file and apply visual stamp
+            try:
+                file_obj = s3_client.get_object(Bucket=default_storage.bucket_name, Key=item.file_key)
+                original_bytes = file_obj["Body"].read()
+                signer_display = user.full_name or user.short_name or user.email
+                stamped_bytes = pdf_signer.stamp_pdf_with_signature(
+                    pdf_bytes=original_bytes,
+                    page_index=zone["zone_page"],
+                    x_pct=zone["zone_x"],
+                    y_pct=zone["zone_y"],
+                    w_pct=zone["zone_width"],
+                    h_pct=zone["zone_height"],
+                    signer_name=signer_display,
+                )
+                s3_client.put_object(
+                    Bucket=default_storage.bucket_name,
+                    Key=duplicated_item.file_key,
+                    Body=stamped_bytes,
+                    ContentType="application/pdf",
+                )
+                duplicated_item.size = len(stamped_bytes)
+                duplicated_item.upload_state = models.ItemUploadStateChoices.READY
+                duplicated_item.save(update_fields=["size", "upload_state", "updated_at"])
+
+            except Exception as exc:
+                logger.exception("Self-sign S3 stamping failed: %s", exc)
+                duplicate_file.delay(item_to_duplicate_id=item.id, duplicated_item_id=duplicated_item.id)
+
+        else:
+            for email in signers:
+                email_lower = email.lower()
+                signer_user = models.User.objects.filter(email__iexact=email_lower).first()
+                if not signer_user:
+                    signer_user = models.User.objects.create(
+                        email=email_lower,
+                        full_name=email_lower.split("@")[0],
+                        short_name=email_lower.split("@")[0],
+                    )
+
+                signer_label = signer_user.short_name or signer_user.full_name or signer_user.email.split("@")[0]
+                clean_label = signer_label.lower().replace(" ", "")
+                copy_title = f"{base_title}_{clean_label}.pdf"
+
+                with transaction.atomic():
+                    duplicated_item = models.Item.objects.create_child(
+                        creator=user,
+                        link_reach=None if parent else models.LinkReachChoices.RESTRICTED,
+                        parent=parent,
+                        title=copy_title,
+                        type=models.ItemTypeChoices.FILE,
+                        size=item.size,
+                        upload_state=models.ItemUploadStateChoices.READY,
+                        mimetype=item.mimetype,
+                        filename=item.filename,
+                        description=item.description,
+                    )
+
+                    if duplicated_item.is_root:
+                        models.ItemAccess.objects.create(
+                            item=duplicated_item,
+                            user=user,
+                            role=models.RoleChoices.OWNER,
+                        )
+
+                    # Give non-editable READER access to the signer
+                    models.ItemAccess.objects.get_or_create(
+                        item=duplicated_item,
+                        user=signer_user,
+                        defaults={"role": models.RoleChoices.READER},
+                    )
+
+                    sign_req = models.SignRequest.objects.create(
+                        original_item=item,
+                        copy_item=duplicated_item,
+                        signer=signer_user,
+                        issuer=user,
+                        status=models.SignRequestStatusChoices.WAITING,
+                        zone_x=zone["zone_x"],
+                        zone_y=zone["zone_y"],
+                        zone_width=zone["zone_width"],
+                        zone_height=zone["zone_height"],
+                        zone_page=zone["zone_page"],
+                    )
+                    created_requests.append(sign_req)
+
+                # Synchronous S3 copy
+                try:
+                    s3_client.copy_object(
+                        Bucket=default_storage.bucket_name,
+                        CopySource={"Bucket": default_storage.bucket_name, "Key": item.file_key},
+                        Key=duplicated_item.file_key,
+                        MetadataDirective="COPY",
+                    )
+                    duplicated_item.upload_state = models.ItemUploadStateChoices.READY
+                    duplicated_item.save(update_fields=["upload_state", "updated_at"])
+                except Exception as exc:
+                    logger.exception("S3 copy_object failed: %s", exc)
+                    duplicated_item.upload_state = models.ItemUploadStateChoices.DUPLICATING
+                    duplicated_item.save(update_fields=["upload_state", "updated_at"])
+                    duplicate_file.delay(item_to_duplicate_id=item.id, duplicated_item_id=duplicated_item.id)
+
+
+        resp_serializer = serializers.SignRequestSerializer(created_requests, many=True)
+        return drf.response.Response(resp_serializer.data, status=drf.status.HTTP_201_CREATED)
+
+    @extend_schema(
+        request=None,
+        responses={200: serializers.SignRequestSerializer},
+    )
+    @drf.decorators.action(detail=True, methods=["post"], url_path="execute-sign")
+    def execute_sign(self, request, pk=None):
+        """
+        Execute the signature process on the copied item.
+        Stamps the PDF visually with the signer's stamp and marks the SignRequest as SIGNED.
+        """
+        item = self.get_object()
+        try:
+            sign_req = models.SignRequest.objects.get(copy_item=item)
+        except models.SignRequest.DoesNotExist:
+            raise drf.exceptions.NotFound("Sign request not found for this item.")
+
+        if sign_req.signer != request.user:
+            raise drf.exceptions.PermissionDenied("You are not the designated signer.")
+
+        if sign_req.status != models.SignRequestStatusChoices.WAITING:
+            raise drf.exceptions.ValidationError("This signature request is not awaiting signature.")
+
+        s3_client = default_storage.connection.meta.client
+        try:
+            file_obj = s3_client.get_object(Bucket=default_storage.bucket_name, Key=item.file_key)
+            original_bytes = file_obj["Body"].read()
+            signer_display = request.user.full_name or request.user.short_name or request.user.email
+            stamped_bytes = pdf_signer.stamp_pdf_with_signature(
+                pdf_bytes=original_bytes,
+                page_index=sign_req.zone_page,
+                x_pct=sign_req.zone_x,
+                y_pct=sign_req.zone_y,
+                w_pct=sign_req.zone_width,
+                h_pct=sign_req.zone_height,
+                signer_name=signer_display,
+            )
+            s3_client.put_object(
+                Bucket=default_storage.bucket_name,
+                Key=item.file_key,
+                Body=stamped_bytes,
+                ContentType="application/pdf",
+            )
+            item.size = len(stamped_bytes)
+            item.save(update_fields=["size", "updated_at"])
+        except Exception as exc:
+            logger.exception("Failed to stamp PDF on execute_sign: %s", exc)
+            raise drf.exceptions.APIException("Failed to apply signature to document storage.")
+
+        sign_req.status = models.SignRequestStatusChoices.SIGNED
+        sign_req.save(update_fields=["status", "updated_at"])
+
+        return drf.response.Response(serializers.SignRequestSerializer(sign_req).data)
+
+    @extend_schema(
+        request=serializers.DeclineSignSerializer,
+        responses={200: serializers.SignRequestSerializer},
+    )
+    @drf.decorators.action(detail=True, methods=["post"], url_path="decline-sign")
+    def decline_sign(self, request, pk=None):
+        """
+        Decline a signature request on the copied item.
+        Marks the SignRequest as DECLINED.
+        """
+        item = self.get_object()
+        try:
+            sign_req = models.SignRequest.objects.get(copy_item=item)
+        except models.SignRequest.DoesNotExist:
+            raise drf.exceptions.NotFound("Sign request not found for this item.")
+
+        if sign_req.signer != request.user:
+            raise drf.exceptions.PermissionDenied("You are not the designated signer.")
+
+        if sign_req.status != models.SignRequestStatusChoices.WAITING:
+            raise drf.exceptions.ValidationError("This signature request is not awaiting signature.")
+
+        serializer = serializers.DeclineSignSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reason = serializer.validated_data.get("reason", "")
+
+        sign_req.status = models.SignRequestStatusChoices.DECLINED
+        sign_req.save(update_fields=["status", "updated_at"])
+
+        return drf.response.Response(serializers.SignRequestSerializer(sign_req).data)
+
 
 
 # Declare the schema statically because `get_serializer_class` depends on
@@ -2413,6 +2757,7 @@ class ConfigView(drf.views.APIView):
         """
         array_settings = [
             "ALLOW_SHARE_IMPORT_FILE",
+            "ALLOW_SIGN_IMPORT_FILE",
             "AWS_S3_UPLOAD_ACL",
             "CRISP_WEBSITE_ID",
             "DATA_UPLOAD_MAX_MEMORY_SIZE",
