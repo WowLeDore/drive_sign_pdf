@@ -94,3 +94,14 @@ def synchronize_descendants_accesses(item, access):
     models.ItemAccess.objects.filter(
         condition_filter, item__in=descendants, role__in=lower_roles
     ).delete()
+
+
+def batch_sign_process_rows(item, issuer, rows):
+    """
+    Create the sign requests (accesses / invitations) for the given {email: role} mapping.
+
+    This currently delegates to the share logic so the endpoint works immediately.
+    Replace this implementation once a dedicated signing model exists.
+    """
+    # TODO: replace with sign-specific model writes once the signing data model is defined.
+    return batch_share_process_rows(item, issuer, rows)

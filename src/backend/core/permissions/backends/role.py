@@ -79,7 +79,10 @@ class ItemAbilities:  # pylint: disable=too-many-public-methods
 
     def can_update(self) -> bool:
         """Return whether the user can modify the item."""
+        if models.SignRequest.objects.filter(copy_item=self.item).exists():
+            return False
         return (self.is_owner_or_admin or self.role == RoleChoices.EDITOR) and not self.is_deleted
+
 
     def can_create_children(self) -> bool:
         """Return whether the user can create children in the item."""
@@ -154,6 +157,41 @@ class ItemAbilities:  # pylint: disable=too-many-public-methods
         """Return whether the user can mark an upload on the item as ended."""
         return self.can_update() and self.user.is_authenticated
 
+
+    def can_sign(self) -> bool:
+        """Return whether the user can sign or request signatures for the item."""
+        if self.is_deleted:
+            return False
+        if self.item.type != models.ItemTypeChoices.FILE:
+            return False
+        if getattr(self.item, "mimetype", "") != "application/pdf":
+            return False
+
+        # If this item is a copy linked to a SignRequest
+        copy_req = models.SignRequest.objects.filter(copy_item=self.item).first()
+        if copy_req:
+            # 1. When a request is DECLINED, you cannot sign it anymore
+            if copy_req.status == models.SignRequestStatusChoices.DECLINED:
+                return False
+
+            # 2. When a request is WAITING, only the designated signer can sign it
+            if copy_req.status == models.SignRequestStatusChoices.WAITING:
+                return copy_req.signer == self.user
+
+            # 3. When a request is SIGNED (approved), it is signable still
+            # so the signed document can be signed again or sent to someone else to sign
+            if copy_req.status == models.SignRequestStatusChoices.SIGNED:
+                return bool(self.role) and self.role in [
+                    RoleChoices.EDITOR,
+                    RoleChoices.ADMIN,
+                    RoleChoices.OWNER,
+                    RoleChoices.READER,
+                ]
+
+        # On the original file, allow owners/admins/editors to initiate signing or self-sign
+        return bool(self.role) and self.role in [RoleChoices.EDITOR, RoleChoices.ADMIN, RoleChoices.OWNER]
+
+
     def as_dict(self) -> dict[str, bool | dict[str, list[str]]]:
         """Return the ability mapping exposed by the API."""
         return {
@@ -175,6 +213,7 @@ class ItemAbilities:  # pylint: disable=too-many-public-methods
             "restrict": self.can_restrict(),
             "restore": self.can_restore(),
             "retrieve": self.can_retrieve(),
+            "can_sign": self.can_sign(),
             "tree": self.can_get(),
             "media_auth": self.can_get(),
             "partial_update": self.can_update(),

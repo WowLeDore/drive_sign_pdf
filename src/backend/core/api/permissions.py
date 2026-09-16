@@ -12,7 +12,12 @@ ACTION_FOR_METHOD_TO_PERMISSION = {
     "versions_detail": {"DELETE": "versions_destroy", "GET": "versions_retrieve"},
     "children": {"GET": "children_list", "POST": "children_create"},
     "batch_share": {"POST": "accesses_manage"},
+    "batch_sign": {"POST": "accesses_manage"},
+    "sign_requests_create": {"POST": "can_sign"},
+    "execute_sign": {"POST": "can_sign"},
+    "decline_sign": {"POST": "can_sign"},
 }
+
 
 
 class IsAuthenticated(permissions.BasePermission):

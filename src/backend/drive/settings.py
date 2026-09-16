@@ -1022,6 +1022,10 @@ class Base(Configuration):
         default=False, environ_name="ALLOW_SHARE_IMPORT_FILE", environ_prefix=None
     )
 
+    ALLOW_SIGN_IMPORT_FILE = values.BooleanValue(
+        default=False, environ_name="ALLOW_SIGN_IMPORT_FILE", environ_prefix=None
+    )
+
     # Frontend
     FRONTEND_THEME = values.Value(None, environ_name="FRONTEND_THEME", environ_prefix=None)
     FRONTEND_MORE_LINK = values.Value(
