@@ -330,6 +330,35 @@ class ItemMetadata(drf.metadata.SimpleMetadata):
         return simple_metadata
 
 
+def get_signer_file_suffix(user):
+    """
+    Format user suffix as e.g. 'jSmith' for 'John Smith' instead of '_john'.
+    Falls back gracefully to email or short name if full name is not composed of multiple words.
+    """
+    full_name = (user.full_name or "").strip()
+    if full_name:
+        parts = full_name.split()
+        if len(parts) >= 2:
+            first_initial = parts[0][0].lower()
+            last_name = "".join(p.capitalize() for p in parts[1:])
+            suffix = re.sub(r"[^\w]", "", f"{first_initial}{last_name}")
+            if suffix:
+                return suffix
+
+    email_local = (user.email or "").split("@")[0].strip()
+    email_parts = re.split(r"[._-]+", email_local)
+    if len(email_parts) >= 2 and all(email_parts):
+        first_initial = email_parts[0][0].lower()
+        last_name = "".join(p.capitalize() for p in email_parts[1:])
+        suffix = re.sub(r"[^\w]", "", f"{first_initial}{last_name}")
+        if suffix:
+            return suffix
+
+    raw = user.short_name or full_name or email_local or "signed"
+    suffix = re.sub(r"[^\w]", "", raw)
+    return suffix or "signed"
+
+
 # pylint: disable=too-many-public-methods
 class ItemViewSet(
     SerializerPerActionMixin,
@@ -2056,9 +2085,8 @@ class ItemViewSet(
             parent = None
 
         if is_self_sign:
-            signer_label = user.short_name or user.full_name or user.email.split("@")[0]
-            clean_label = signer_label.lower().replace(" ", "")
-            copy_title = f"{base_title}_{clean_label}.pdf"
+            signer_label = get_signer_file_suffix(user)
+            copy_title = f"{base_title}_{signer_label}.pdf"
 
             with transaction.atomic():
                 duplicated_item = models.Item.objects.create_child(
@@ -2128,15 +2156,17 @@ class ItemViewSet(
                 email_lower = email.lower()
                 signer_user = models.User.objects.filter(email__iexact=email_lower).first()
                 if not signer_user:
+                    email_local = email_lower.split("@")[0]
+                    email_parts = re.split(r"[._-]+", email_local)
+                    full_name = " ".join(p.capitalize() for p in email_parts)
                     signer_user = models.User.objects.create(
                         email=email_lower,
-                        full_name=email_lower.split("@")[0],
-                        short_name=email_lower.split("@")[0],
+                        full_name=full_name,
+                        short_name=email_parts[0].capitalize(),
                     )
 
-                signer_label = signer_user.short_name or signer_user.full_name or signer_user.email.split("@")[0]
-                clean_label = signer_label.lower().replace(" ", "")
-                copy_title = f"{base_title}_{clean_label}.pdf"
+                signer_label = get_signer_file_suffix(signer_user)
+                copy_title = f"{base_title}_{signer_label}.pdf"
 
                 with transaction.atomic():
                     duplicated_item = models.Item.objects.create_child(

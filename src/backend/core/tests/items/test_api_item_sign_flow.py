@@ -59,9 +59,9 @@ def test_self_sign_flow():
     assert len(data) == 1
     assert data[0]["status"] == "signed"
 
-    # Verify copy item was created with title "contract_alice.pdf"
+    # Verify copy item was created with title "contract_aDurand.pdf"
     copy_item = models.Item.objects.get(id=data[0]["copy_item"])
-    assert copy_item.title == "contract_alice.pdf"
+    assert copy_item.title == "contract_aDurand.pdf"
     assert copy_item.upload_state == models.ItemUploadStateChoices.READY
     assert copy_item.creator == user
 
@@ -124,8 +124,8 @@ def test_request_sign_flow_multiple_signers():
     # Both requests are in WAITING status
     assert all(r["status"] == "waiting" for r in data)
 
-    bob_copy = models.Item.objects.get(title="contrat_partenariat_bob.pdf")
-    charlie_copy = models.Item.objects.get(title="contrat_partenariat_charlie.pdf")
+    bob_copy = models.Item.objects.get(title="contrat_partenariat_bMartin.pdf")
+    charlie_copy = models.Item.objects.get(title="contrat_partenariat_cRoy.pdf")
 
     # Both copies are non-editable (READER role assigned to signer)
     assert bob_copy.get_role(bob) == models.RoleChoices.READER
@@ -341,3 +341,18 @@ def test_sign_copy_is_non_editable():
     client.force_login(bob)
     res_patch = client.patch(f"/api/v1.0/items/{bob_copy_id}/", {"title": "new_title.pdf"}, format="json")
     assert res_patch.status_code == 403
+
+
+def test_signer_file_suffix_naming():
+    """Verify signer file suffix formats like _jSmith for John Smith."""
+    from core.api.viewsets import get_signer_file_suffix
+
+    john = factories.UserFactory(full_name="John Smith", short_name="John", email="john.smith@example.com")
+    assert get_signer_file_suffix(john) == "jSmith"
+
+    alice = factories.UserFactory(full_name="Alice Durand", short_name="Alice")
+    assert get_signer_file_suffix(alice) == "aDurand"
+
+    email_only = factories.UserFactory(full_name=None, short_name=None, email="claire.dupont@test.com")
+    assert get_signer_file_suffix(email_only) == "cDupont"
+
