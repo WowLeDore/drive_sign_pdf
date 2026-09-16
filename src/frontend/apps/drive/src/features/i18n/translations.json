@@ -596,6 +596,11 @@
               "error": "Conversion failed. Please try again.",
               "analyzing_notice": "This file is still being analyzed for malware. The conversion will start automatically once the analysis is complete."
             }
+          },
+          "sign": {
+            "modal": {
+              "title": "Sign"
+            }
           }
         },
         "item": {
@@ -612,7 +617,8 @@
             "unfavorite": "Unstar",
             "duplicate": "Duplicate",
             "duplicate_error": "An error occurred while duplicating the item.",
-            "delete": "Delete"
+            "delete": "Delete",
+            "sign": "Sign"
           },
           "duplicating": "duplication in progress",
           "converting": "conversion in progress"
@@ -705,6 +711,58 @@
         "title": "User reconciliation",
         "success": "Your email address has been confirmed. To complete the merge of your accounts, please click the confirmation links sent to all the addresses you provided.",
         "error": "An error occurred during email validation."
+      },
+      "sign_modal": {
+        "title": "Sign document: {{title}}",
+        "self_section_title": "Need to sign this document yourself?",
+        "self_button": "Sign document myself",
+        "or": "or request signatures from others",
+        "request_section_title": "Invite people to sign this document",
+        "request_section_desc": "Enter the email addresses of the people who need to sign:",
+        "input_placeholder": "Email address (e.g. name@example.com)",
+        "add_button": "Add",
+        "signers_title": "Signers to invite ({{count}})",
+        "no_signers": "No signers added yet. Type an email address above and click Add.",
+        "role_signer": "Signer",
+        "remove_signer": "Remove",
+        "cancel": "Cancel",
+        "continue": "Continue to document"
+      },
+      "sign_viewer": {
+        "confirm_zone": "Confirm signature zone",
+        "place_zone": "Click on the document to place the zone",
+        "self_sign_btn": "Sign document",
+        "send_requests_btn": "Send signature request ({{count}})",
+        "recipient_sign_btn": "Sign document",
+        "recipient_decline_btn": "Decline",
+        "self_signed_success": "Document signed successfully!",
+        "recipient_signed_success": "Document signed successfully!",
+        "recipient_declined_success": "Signature request declined.",
+        "success": "Signature request sent successfully!",
+        "no_signers": "No signers specified.",
+        "error_create": "An error occurred while creating signature requests."
+      },
+      "decline_sign_modal": {
+        "title": "Decline to sign document",
+        "description": "Are you sure you want to decline signing this document? The issuer will be notified and the document will be marked as declined.",
+        "reason_label": "Reason for decline (optional)",
+        "reason_placeholder": "Provide a reason for declining if desired...",
+        "cancel": "Cancel",
+        "confirm": "Confirm decline"
+      },
+      "sign_badge": {
+        "waiting": "Waiting",
+        "signed": "Signed",
+        "declined": "Declined"
+      },
+      "sign_zone": {
+        "label": "Signature",
+        "signed_by": "Electronically signed by:",
+        "signed_at": "On {{date}}",
+        "future_title": "Signature zone",
+        "future_desc": "Recipients will sign at this location",
+        "default_signer": "Signer",
+        "resize": "Resize zone"
       }
     }
   },
@@ -1305,6 +1363,11 @@
               "error": "La conversion a échoué. Veuillez réessayer.",
               "analyzing_notice": "Ce fichier est encore en cours d'analyse antivirus. La conversion démarrera automatiquement une fois l'analyse terminée."
             }
+          },
+          "sign": {
+            "modal": {
+              "title": "Signer"
+            }
           }
         },
         "item": {
@@ -1321,7 +1384,8 @@
             "unfavorite": "Retirer des favoris",
             "duplicate": "Dupliquer",
             "duplicate_error": "Une erreur est survenue lors de la duplication.",
-            "delete": "Supprimer"
+            "delete": "Supprimer",
+            "sign": "Signer"
           },
           "duplicating": "duplication en cours",
           "converting": "conversion en cours"
@@ -1414,6 +1478,58 @@
         "title": "Réconciliation de comptes",
         "success": "Votre adresse e-mail a été confirmée. Pour finaliser la fusion de vos comptes, cliquez sur les liens de confirmation envoyés à toutes les adresses que vous avez fournies.",
         "error": "Une erreur s'est produite lors de la validation de l'e-mail."
+      },
+      "sign_modal": {
+        "title": "Faire signer : {{title}}",
+        "self_section_title": "Vous devez signer ce document vous-même ?",
+        "self_button": "Signer le document moi-même",
+        "or": "ou faire signer par d'autres personnes",
+        "request_section_title": "Inviter des personnes à signer ce document",
+        "request_section_desc": "Renseignez les adresses email des personnes qui doivent signer :",
+        "input_placeholder": "Adresse email (ex : nom@exemple.fr)",
+        "add_button": "Ajouter",
+        "signers_title": "Signataires à inviter ({{count}})",
+        "no_signers": "Aucun signataire ajouté. Saisissez une adresse email ci-dessus et cliquez sur Ajouter.",
+        "role_signer": "Signataire",
+        "remove_signer": "Supprimer",
+        "cancel": "Annuler",
+        "continue": "Continuer vers le document"
+      },
+      "sign_viewer": {
+        "confirm_zone": "Confirmer la zone de signature",
+        "place_zone": "Cliquez sur le document pour placer la zone",
+        "self_sign_btn": "Signer le document",
+        "send_requests_btn": "Envoyer la demande ({{count}})",
+        "recipient_sign_btn": "Signer le document",
+        "recipient_decline_btn": "Refuser",
+        "self_signed_success": "Document signé avec succès !",
+        "recipient_signed_success": "Document signé avec succès !",
+        "recipient_declined_success": "Demande de signature refusée.",
+        "success": "Demande de signature envoyée avec succès !",
+        "no_signers": "Aucun signataire spécifié.",
+        "error_create": "Une erreur est survenue lors de l'envoi de la demande de signature."
+      },
+      "decline_sign_modal": {
+        "title": "Refuser de signer le document",
+        "description": "Êtes-vous sûr de vouloir refuser de signer ce document ? L'émetteur en sera informé et le document sera marqué comme refusé.",
+        "reason_label": "Motif du refus (optionnel)",
+        "reason_placeholder": "Indiquez la raison de votre refus si vous le souhaitez...",
+        "cancel": "Annuler",
+        "confirm": "Confirmer le refus"
+      },
+      "sign_badge": {
+        "waiting": "En attente",
+        "signed": "Signé",
+        "declined": "Refusé"
+      },
+      "sign_zone": {
+        "label": "Signature",
+        "signed_by": "Signé électroniquement par :",
+        "signed_at": "Le {{date}}",
+        "future_title": "Zone de signature",
+        "future_desc": "Les destinataires signeront à cet emplacement",
+        "default_signer": "Signataire",
+        "resize": "Redimensionner la zone"
       }
     }
   },
@@ -2014,6 +2130,11 @@
               "error": "Conversie mislukt. Probeer het opnieuw.",
               "analyzing_notice": "Dit bestand wordt nog gecontroleerd op malware. De conversie start automatisch zodra de analyse is voltooid."
             }
+          },
+          "sign": {
+            "modal": {
+              "title": "Ondertekenen"
+            }
           }
         },
         "item": {
@@ -2030,7 +2151,8 @@
             "unfavorite": "Verwijder uit favorieten",
             "duplicate": "Dupliceer",
             "duplicate_error": "Er is een fout opgetreden bij het dupliceren.",
-            "delete": "Verwijder"
+            "delete": "Verwijder",
+            "sign": "Ondertekenen"
           },
           "duplicating": "duplicatie bezig",
           "converting": "conversie bezig"
@@ -2123,6 +2245,58 @@
         "title": "Accountreconciliatie",
         "success": "Uw e-mailadres is bevestigd. Klik op de bevestigingslinks die naar alle door u opgegeven adressen zijn verzonden om het samenvoegen van uw accounts te voltooien.",
         "error": "Er is een fout opgetreden tijdens de e-mailvalidatie."
+      },
+      "sign_modal": {
+        "title": "Document ondertekenen: {{title}}",
+        "self_section_title": "Moet u dit document zelf ondertekenen?",
+        "self_button": "Document zelf ondertekenen",
+        "or": "of handtekeningen aanvragen bij anderen",
+        "request_section_title": "Mensen uitnodigen om dit document te ondertekenen",
+        "request_section_desc": "Voer de e-mailadressen in van de mensen die moeten ondertekenen:",
+        "input_placeholder": "E-mailadres (bijv. naam@voorbeeld.nl)",
+        "add_button": "Toevoegen",
+        "signers_title": "Ondertekenaars om uit te nodigen ({{count}})",
+        "no_signers": "Nog geen ondertekenaars toegevoegd. Voer hierboven een e-mailadres in en klik op Toevoegen.",
+        "role_signer": "Ondertekenaar",
+        "remove_signer": "Verwijderen",
+        "cancel": "Annuleren",
+        "continue": "Doorgaan naar document"
+      },
+      "sign_viewer": {
+        "confirm_zone": "Handtekeningzone bevestigen",
+        "place_zone": "Klik op het document om de zone te plaatsen",
+        "self_sign_btn": "Document ondertekenen",
+        "send_requests_btn": "Verzoek verzenden ({{count}})",
+        "recipient_sign_btn": "Document ondertekenen",
+        "recipient_decline_btn": "Weigeren",
+        "self_signed_success": "Document succesvol ondertekend!",
+        "recipient_signed_success": "Document succesvol ondertekend!",
+        "recipient_declined_success": "Handtekeningverzoek geweigerd.",
+        "success": "Handtekeningverzoek succesvol verzonden!",
+        "no_signers": "Geen ondertekenaars opgegeven.",
+        "error_create": "Er is een fout opgetreden bij het verzenden van het handtekeningverzoek."
+      },
+      "decline_sign_modal": {
+        "title": "Document weigeren te ondertekenen",
+        "description": "Weet u zeker dat u dit document wilt weigeren te ondertekenen? De afzender wordt op de hoogte gesteld en het document wordt gemarkeerd als geweigerd.",
+        "reason_label": "Reden voor weigering (optioneel)",
+        "reason_placeholder": "Geef indien gewenst een reden op voor de weigering...",
+        "cancel": "Annuleren",
+        "confirm": "Weigering bevestigen"
+      },
+      "sign_badge": {
+        "waiting": "In afwachting",
+        "signed": "Ondertekend",
+        "declined": "Geweigerd"
+      },
+      "sign_zone": {
+        "label": "Handtekening",
+        "signed_by": "Elektronisch ondertekend door:",
+        "signed_at": "Op {{date}}",
+        "future_title": "Handtekeningzone",
+        "future_desc": "Ontvangers ondertekenen op deze locatie",
+        "default_signer": "Ondertekenaar",
+        "resize": "Zone vergroten/verkleinen"
       }
     }
   }
