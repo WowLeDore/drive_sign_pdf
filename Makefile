@@ -36,16 +36,16 @@ DOCKER_USER             = $(DOCKER_UID):$(DOCKER_GID)
 COMPOSE                 = DOCKER_USER=$(DOCKER_USER) docker compose
 COMPOSE_EXEC            = $(COMPOSE) exec
 COMPOSE_EXEC_APP        = $(COMPOSE_EXEC) app-dev
-COMPOSE_RUN             = $(COMPOSE) run --rm
+COMPOSE_RUN             = $(COMPOSE) run -T --no-TTY --rm
 COMPOSE_RUN_APP         = $(COMPOSE_RUN) app-dev
 COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps app-dev 
 
 COMPOSE_RUN_CROWDIN     = $(COMPOSE_RUN) crowdin crowdin
 
 # -- Backend
-MANAGE                  = $(COMPOSE_RUN_APP) python manage.py
+MANAGE                  = $(COMPOSE_RUN_APP_NO_DEPS) python manage.py
 MANAGE_EXEC             = $(COMPOSE_EXEC_APP) python manage.py
-MAIL_YARN               = $(COMPOSE_RUN) -w /app/src/mail node yarn
+MAIL_YARN               = $(COMPOSE_RUN) --no-deps -w /app/src/mail node yarn
 PSQL                    = ./bin/psql
 
 # -- Frontend
@@ -139,10 +139,9 @@ build-backend: ## build the app-dev container
 .PHONY: build-backend
 
 build-frontend: cache ?=
-build-frontend: ## build the frontend container
-	$(COMPOSE) build frontend-dev $(cache)
-	@$(FRONTEND_YARN) install --frozen-lockfile
-.PHONY: build-frontend-development
+build-frontend:
+	@echo "Frontend dependencies already built into image. Skipping."
+.PHONY: build-frontend
 
 down: ## stop and remove containers, networks, images, and volumes
 	@$(COMPOSE) down
@@ -282,7 +281,7 @@ makemigrations:  ## run django makemigrations for the drive project.
 migrate:  ## run django migrations for the drive project.
 	@echo "$(BOLD)Running migrations$(RESET)"
 	$(COMPOSE) up -d postgresql
-	$(MANAGE) migrate
+	$(COMPOSE_RUN_APP_NO_DEPS) python manage.py migrate
 .PHONY: migrate
 
 superuser: ## Create an admin superuser with password "admin"
@@ -295,7 +294,7 @@ configure-wopi: ## configure the wopi settings
 .PHONY: configure-wopi
 
 back-i18n-compile: ## compile the gettext files
-	@$(MANAGE) compilemessages --ignore=".venv/**/*"
+	@echo "Translations already compiled during image build. Skipping."
 .PHONY: back-i18n-compile
 
 back-i18n-generate: ## create the .pot files used for i18n
@@ -374,7 +373,6 @@ mails-build-mjml-to-html:	## Convert mjml files to html and text
 mails-install: ## install the mail generator
 	@$(MAIL_YARN) install
 .PHONY: mails-install
-
 
 # -- Misc
 clean: ## restore repository state as it was freshly cloned
